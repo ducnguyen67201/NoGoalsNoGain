@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A local-first focus system for developers and founders."
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <title>No Goals No Gain</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <dialog id="goal-dialog" aria-labelledby="goal-dialog-title">
+      <form id="goal-form" class="dialog-form">
+        <div class="dialog-heading">
+          <div>
+            <span class="eyebrow">Choose an outcome</span>
+            <h2 id="goal-dialog-title">Create a goal</h2>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            data-action="close-goal-dialog"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="dialog-fields">
+          <label class="field">
+            <span>Outcome</span>
+            <input
+              name="title"
+              type="text"
+              maxlength="120"
+              placeholder="Ship onboarding to the first 10 users"
+              required
+            />
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Horizon</span>
+              <select name="period">
+                <option value="daily">Today</option>
+                <option value="weekly">This week</option>
+                <option value="monthly">This month</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Focus target (minutes)</span>
+              <input
+                name="targetMinutes"
+                type="number"
+                min="1"
+                max="100000"
+                value="90"
+                required
+              />
+            </label>
+          </div>
+
+          <label class="checkbox-field">
+            <input name="isPrimary" type="checkbox" checked />
+            <span>Make this the primary outcome shown in the menu bar.</span>
+          </label>
+        </div>
+
+        <div class="dialog-actions">
+          <button
+            class="button button-ghost"
+            type="button"
+            data-action="close-goal-dialog"
+          >
+            Cancel
+          </button>
+          <button class="button button-primary" type="submit">Create goal</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
