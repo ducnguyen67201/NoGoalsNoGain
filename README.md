@@ -7,6 +7,9 @@ goals, and builds a lightweight decision history through daily reviews.
 ## What the MVP includes
 
 - Persistent macOS menu-bar text for the primary goal
+- Exact menu-bar status preview in the dashboard
+- Optional launch at login so the goal returns after a Mac restart
+- Signed in-app updates with download progress and automatic relaunch
 - Live focus timer that continues when the dashboard is hidden
 - Daily, weekly, and monthly goals with focus targets
 - Primary-goal selection and goal completion
@@ -14,7 +17,7 @@ goals, and builds a lightweight decision history through daily reviews.
 - Plan-versus-actual and completion insights
 - Daily founder closeout: shipped, blocker, and next focus
 - Local JSON persistence with atomic writes
-- No accounts, analytics, cloud services, or network access
+- No accounts, analytics, or cloud sync; network access is limited to update checks
 
 ## Stack
 
@@ -36,9 +39,13 @@ npm install
 npm run tauri dev
 ```
 
-On first launch, the dashboard opens automatically. After that, use the menu-bar
-item to show or hide it. Right-click the menu-bar item to open the dashboard,
-stop the current focus session, or quit.
+On first launch, the light glass dashboard opens automatically. After that, use
+the goal text in the menu bar to show or hide it. Right-click the menu-bar item
+to open the dashboard, stop the current focus session, or quit. The menu-bar
+panel in the dashboard can enable launch at login.
+
+If you use a menu-bar organizer such as Ice or Bartender, mark No Goals No Gain
+as always visible so the goal text is not moved into the hidden-items section.
 
 ## Verify
 
@@ -47,8 +54,11 @@ npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
-npm run tauri build
 ```
+
+Bundled updater builds require the private signing key. See
+[docs/RELEASING.md](docs/RELEASING.md) for the local build and GitHub release
+workflow.
 
 ## Local data
 

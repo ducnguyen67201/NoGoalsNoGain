@@ -142,6 +142,7 @@ pub struct DashboardStats {
 pub struct Dashboard {
     pub now: i64,
     pub today: String,
+    pub menu_bar_title: String,
     pub goals: Vec<GoalView>,
     pub active_session: Option<FocusSessionView>,
     pub recent_sessions: Vec<FocusSessionView>,

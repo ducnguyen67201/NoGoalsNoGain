@@ -1,4 +1,10 @@
-import type { Dashboard, Goal, GoalPeriod } from "./types";
+import type {
+  AppUpdateState,
+  Dashboard,
+  Goal,
+  GoalPeriod,
+  SystemPreferences,
+} from "./types";
 
 function escapeHtml(value: string): string {
   return value
@@ -85,6 +91,14 @@ function goalProgress(goal: Goal): number {
   );
 }
 
+function stairLogo(): string {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 20v-5h5v-5h5V5h6" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  `;
+}
+
 function currentGoals(data: Dashboard, period?: GoalPeriod): Goal[] {
   return data.goals.filter(
     (goal) =>
@@ -134,6 +148,9 @@ function renderSidebar(): string {
         <button class="nav-item" data-action="scroll" data-target="history">
           <span aria-hidden="true">◷</span> History
         </button>
+        <button class="nav-item" data-action="scroll" data-target="settings">
+          <span aria-hidden="true">⌘</span> Menu bar
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -144,6 +161,45 @@ function renderSidebar(): string {
         </div>
       </div>
     </aside>
+  `;
+}
+
+function renderMenuBarPanel(
+  data: Dashboard,
+  preferences: SystemPreferences,
+): string {
+  return `
+    <section id="settings" class="menu-bar-panel glass-panel" aria-label="Menu bar settings">
+      <div class="menu-bar-copy">
+        <span class="eyebrow">Always in sight</span>
+        <h2>Your focus lives in the Mac menu bar.</h2>
+        <p>The label updates automatically when you choose a primary goal or start a timer.</p>
+      </div>
+
+      <div class="menu-bar-preview-wrap">
+        <span class="preview-label">Live preview</span>
+        <div class="menu-bar-preview" aria-label="Menu bar preview: ${escapeHtml(data.menuBarTitle)}">
+          <strong>${escapeHtml(data.menuBarTitle)}</strong>
+        </div>
+      </div>
+
+      <div class="startup-setting">
+        <div>
+          <strong>Launch at login</strong>
+          <span>Keep the goal visible after restarting your Mac.</span>
+        </div>
+        <button
+          class="switch ${preferences.launchAtLogin ? "is-on" : ""}"
+          type="button"
+          role="switch"
+          aria-checked="${preferences.launchAtLogin}"
+          data-action="toggle-autostart"
+          aria-label="Launch No Goals No Gain at login"
+        >
+          <span></span>
+        </button>
+      </div>
+    </section>
   `;
 }
 
@@ -503,7 +559,95 @@ function renderHistory(data: Dashboard): string {
   `;
 }
 
-export function renderDashboard(data: Dashboard): string {
+function updateStatusCopy(update: AppUpdateState): {
+  eyebrow: string;
+  title: string;
+  detail: string;
+} {
+  const version = update.version ? ` ${update.version}` : "";
+
+  switch (update.phase) {
+    case "available":
+      return {
+        eyebrow: "Update ready",
+        title: `No Goals No Gain${version}`,
+        detail:
+          update.notes?.trim() ||
+          "A new version is ready to install. Your local goals and focus history stay in place.",
+      };
+    case "downloading":
+      return {
+        eyebrow: "Downloading update",
+        title:
+          update.progress === null
+            ? "Preparing the download…"
+            : `${update.progress}% downloaded`,
+        detail: "You can keep using the app while the update downloads.",
+      };
+    case "installing":
+      return {
+        eyebrow: "Installing update",
+        title: "Almost there…",
+        detail: "No Goals No Gain will relaunch automatically when it is ready.",
+      };
+    case "error":
+      return {
+        eyebrow: "Update paused",
+        title: "The update could not be installed.",
+        detail: "Check your connection and try the installation again.",
+      };
+    case "idle":
+    case "checking":
+      return { eyebrow: "", title: "", detail: "" };
+  }
+}
+
+function renderUpdateProgress(update: AppUpdateState, className: string): string {
+  if (update.phase !== "downloading" && update.phase !== "installing") {
+    return "";
+  }
+
+  const progress = update.phase === "installing" ? 100 : update.progress;
+  return `
+    <span class="${className} ${progress === null ? "is-indeterminate" : ""}" aria-hidden="true">
+      <i style="${progress === null ? "" : `width: ${progress}%`}"></i>
+    </span>
+  `;
+}
+
+function renderDashboardUpdate(update: AppUpdateState): string {
+  if (update.phase === "idle" || update.phase === "checking") {
+    return "";
+  }
+
+  const copy = updateStatusCopy(update);
+  const canInstall = update.phase === "available" || update.phase === "error";
+  const actionLabel = update.phase === "error" ? "Try again" : "Install update now";
+
+  return `
+    <section class="update-prompt glass-panel is-${update.phase}" role="status" aria-live="polite">
+      <span class="update-prompt-icon" aria-hidden="true">↻</span>
+      <div class="update-prompt-copy">
+        <span class="eyebrow">${escapeHtml(copy.eyebrow)}</span>
+        <strong>${escapeHtml(copy.title)}</strong>
+        <p>${escapeHtml(copy.detail)}</p>
+        ${renderUpdateProgress(update, "update-progress")}
+      </div>
+      <button
+        class="button button-primary update-prompt-action"
+        type="button"
+        data-action="install-update"
+        ${canInstall ? "" : "disabled"}
+      >${canInstall ? actionLabel : update.phase === "installing" ? "Installing…" : "Downloading…"}</button>
+    </section>
+  `;
+}
+
+export function renderDashboard(
+  data: Dashboard,
+  preferences: SystemPreferences,
+  update: AppUpdateState,
+): string {
   return `
     <div class="app-shell">
       ${renderSidebar()}
@@ -517,6 +661,8 @@ export function renderDashboard(data: Dashboard): string {
             </div>
             <button class="button button-secondary" data-action="new-goal">+ New goal</button>
           </header>
+          ${renderDashboardUpdate(update)}
+          ${renderMenuBarPanel(data, preferences)}
           ${renderFocusCard(data)}
           ${renderStatCards(data)}
         </section>
@@ -525,6 +671,168 @@ export function renderDashboard(data: Dashboard): string {
         ${renderReview(data)}
         ${renderHistory(data)}
       </main>
+    </div>
+  `;
+}
+
+function renderQuickUpdate(update: AppUpdateState): string {
+  if (update.phase === "idle" || update.phase === "checking") {
+    return "";
+  }
+
+  const copy = updateStatusCopy(update);
+  const canInstall = update.phase === "available" || update.phase === "error";
+  const actionLabel = update.phase === "error" ? "Try again" : "Install update now";
+
+  return `
+    <section class="quick-update is-${update.phase}" role="status" aria-live="polite">
+      <span class="quick-update-icon" aria-hidden="true">↻</span>
+      <span class="quick-update-copy">
+        <strong>${escapeHtml(copy.title)}</strong>
+        <small>${escapeHtml(copy.eyebrow)}</small>
+      </span>
+      <button type="button" data-action="install-update" ${canInstall ? "" : "disabled"}>
+        ${canInstall ? actionLabel : update.phase === "installing" ? "Installing…" : update.progress === null ? "Downloading…" : `${update.progress}%`}
+      </button>
+      ${renderUpdateProgress(update, "quick-update-progress")}
+    </section>
+  `;
+}
+
+function renderQuickGoal(goal: Goal, data: Dashboard): string {
+  const isFocusing = data.activeSession?.goalId === goal.id;
+  const progress = goalProgress(goal);
+
+  return `
+    <div class="quick-goal-row ${goal.isPrimary ? "is-primary" : ""}">
+      <button
+        class="quick-goal-select"
+        type="button"
+        data-action="primary-goal"
+        data-goal-id="${goal.id}"
+        aria-pressed="${goal.isPrimary}"
+      >
+        <span class="quick-goal-period period-${goal.period}">${periodLabel(goal.period)}</span>
+        <span class="quick-goal-copy">
+          <strong>${escapeHtml(goal.title)}</strong>
+          <span>${formatDuration(goal.trackedSeconds)} of ${goal.targetMinutes}m · ${progress}%</span>
+        </span>
+        ${goal.isPrimary ? '<span class="quick-goal-check" aria-label="Primary goal">✓</span>' : ""}
+      </button>
+      <button
+        class="quick-goal-focus"
+        type="button"
+        data-action="${isFocusing ? "stop-focus" : "start-focus"}"
+        data-goal-id="${goal.id}"
+        aria-label="${isFocusing ? "Stop focusing on" : "Start focusing on"} ${escapeHtml(goal.title)}"
+        title="${isFocusing ? "Stop focus" : "Start focus"}"
+      >${isFocusing ? "■" : "▶"}</button>
+    </div>
+  `;
+}
+
+export function renderMenuBarPopover(
+  data: Dashboard,
+  update: AppUpdateState,
+): string {
+  const goals = currentGoals(data)
+    .filter((goal) => goal.status === "active")
+    .sort((left, right) => {
+      if (left.isPrimary !== right.isPrimary) {
+        return left.isPrimary ? -1 : 1;
+      }
+      return left.periodEnd - right.periodEnd;
+    });
+  const focusGoal = data.activeSession
+    ? data.goals.find((goal) => goal.id === data.activeSession?.goalId) ?? null
+    : suggestedGoal(data);
+  const progress = focusGoal ? goalProgress(focusGoal) : 0;
+
+  return `
+    <div class="quick-panel-frame">
+      <section class="quick-panel" aria-label="No Goals No Gain quick focus">
+        <header class="quick-panel-header">
+          <div class="quick-panel-brand">
+            <span class="quick-panel-logo">${stairLogo()}</span>
+            <span>
+              <strong>No Goals No Gain</strong>
+              <small>Local focus system</small>
+            </span>
+          </div>
+          <button class="quick-icon-button" type="button" data-action="close-popover" aria-label="Close quick focus">×</button>
+        </header>
+
+        <section class="quick-focus-card ${data.activeSession ? "is-running" : ""}">
+          <div class="quick-focus-label">
+            <span>${data.activeSession ? '<i class="quick-live-dot"></i> Focusing now' : "Today’s focus"}</span>
+            ${focusGoal ? `<span>${periodLabel(focusGoal.period)}</span>` : ""}
+          </div>
+          <div class="quick-focus-main">
+            <div>
+              <h1>${focusGoal ? escapeHtml(focusGoal.title) : "Set today’s focus"}</h1>
+              <p>${
+                data.activeSession
+                  ? `Started ${formatDateTime(data.activeSession.startedAt)}`
+                  : focusGoal
+                    ? `${formatDuration(focusGoal.trackedSeconds)} focused of ${focusGoal.targetMinutes}m planned`
+                    : "Choose one concrete outcome before the day chooses for you."
+              }</p>
+            </div>
+            ${
+              data.activeSession
+                ? `<strong class="quick-timer" data-timer-start="${data.activeSession.startedAt}">${formatDuration(data.activeSession.elapsedSeconds, true)}</strong>`
+                : focusGoal
+                  ? `<strong class="quick-progress-number">${progress}%</strong>`
+                  : ""
+            }
+          </div>
+          ${
+            focusGoal
+              ? `<div class="quick-progress"><span style="width: ${progress}%"></span></div>`
+              : ""
+          }
+          <div class="quick-focus-actions">
+            ${
+              data.activeSession
+                ? '<button class="quick-primary-button is-stop" data-action="stop-focus">Stop focus</button>'
+                : focusGoal
+                  ? `<button class="quick-primary-button" data-action="start-focus" data-goal-id="${focusGoal.id}">Start focus</button>`
+                  : '<button class="quick-primary-button" data-action="new-goal" data-period="daily">Set a goal</button>'
+            }
+            <button class="quick-secondary-button" data-action="open-dashboard">Open dashboard</button>
+          </div>
+        </section>
+
+        <section class="quick-goals-section" aria-labelledby="quick-goals-title">
+          <div class="quick-section-heading">
+            <div>
+              <span>Direction</span>
+              <h2 id="quick-goals-title">Your goals</h2>
+            </div>
+            <button type="button" data-action="new-goal">＋ Set a goal</button>
+          </div>
+          <div class="quick-goal-list" role="list">
+            ${
+              goals.length > 0
+                ? goals.map((goal) => renderQuickGoal(goal, data)).join("")
+                : `
+                  <button class="quick-empty-goals" data-action="new-goal" data-period="daily">
+                    <span>＋</span>
+                    <strong>Create your first goal</strong>
+                    <small>Daily, weekly, or monthly</small>
+                  </button>
+                `
+            }
+          </div>
+        </section>
+
+        ${renderQuickUpdate(update)}
+
+        <footer class="quick-panel-footer">
+          <span><i></i> Stored only on this Mac</span>
+          <button type="button" data-action="open-dashboard">Review progress <span>→</span></button>
+        </footer>
+      </section>
     </div>
   `;
 }

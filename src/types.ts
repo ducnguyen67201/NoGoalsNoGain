@@ -53,6 +53,7 @@ export interface DashboardStats {
 export interface Dashboard {
   now: number;
   today: string;
+  menuBarTitle: string;
   goals: Goal[];
   activeSession: FocusSession | null;
   recentSessions: FocusSession[];
@@ -71,4 +72,24 @@ export interface ReviewInput {
   shipped: string;
   blocker: string;
   nextFocus: string;
+}
+
+export interface SystemPreferences {
+  launchAtLogin: boolean;
+}
+
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "installing"
+  | "error";
+
+export interface AppUpdateState {
+  phase: UpdatePhase;
+  version: string | null;
+  notes: string | null;
+  progress: number | null;
+  error: string | null;
 }

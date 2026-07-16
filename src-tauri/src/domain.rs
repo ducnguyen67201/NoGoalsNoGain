@@ -7,6 +7,8 @@ use crate::models::{
     GoalInput, GoalPeriod, GoalStatus, GoalView, PeriodSummary, ReviewInput,
 };
 
+const MENU_BAR_IDLE_TITLE_MAX_CHARS: usize = 9;
+
 pub fn now_timestamp() -> i64 {
     Utc::now().timestamp()
 }
@@ -256,6 +258,7 @@ pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
     Dashboard {
         now,
         today,
+        menu_bar_title: menu_bar_title(data, now),
         goals,
         active_session,
         recent_sessions,
@@ -274,13 +277,8 @@ pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
 
 pub fn menu_bar_title(data: &AppData, now: i64) -> String {
     if let Some(session) = active_session(data) {
-        let title = goal_title(data, &session.goal_id);
         let elapsed = session_elapsed_seconds(session, now);
-        return format!(
-            "{} · {}",
-            truncate_title(title, 28),
-            format_elapsed(elapsed)
-        );
+        return format_elapsed(elapsed);
     }
 
     let goal = data
@@ -296,15 +294,8 @@ pub fn menu_bar_title(data: &AppData, now: i64) -> String {
         });
 
     match goal {
-        Some(goal) => {
-            let tracked_minutes = tracked_seconds_for_goal(data, &goal.id, now) / 60;
-            format!(
-                "{} · {tracked_minutes}/{}m",
-                truncate_title(&goal.title, 28),
-                goal.target_minutes
-            )
-        }
-        None => "Set today’s focus".to_string(),
+        Some(goal) => truncate_title(&goal.title, MENU_BAR_IDLE_TITLE_MAX_CHARS),
+        None => "Set focus".to_string(),
     }
 }
 
@@ -605,10 +596,26 @@ mod tests {
         });
         data.active_session_id = Some("session".to_string());
 
-        assert_eq!(
-            menu_bar_title(&data, 4_661),
-            "Ship the founder onboarding · 1:01:01"
-        );
+        assert_eq!(menu_bar_title(&data, 4_661), "1:01:01");
+    }
+
+    #[test]
+    fn idle_menu_bar_title_stays_short_enough_for_a_notched_display() {
+        let mut data = AppData::default();
+        data.goals.push(Goal {
+            id: "goal".to_string(),
+            title: "Ship the founder onboarding".to_string(),
+            period: GoalPeriod::Daily,
+            target_minutes: 90,
+            period_start: 0,
+            period_end: 10_000,
+            created_at: 0,
+            completed_at: None,
+            status: GoalStatus::Active,
+            is_primary: true,
+        });
+
+        assert_eq!(menu_bar_title(&data, 4_661), "Ship the…");
     }
 
     #[test]

@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -21,7 +22,25 @@
         "center": true,
         "visible": false,
         "resizable": true,
-        "backgroundColor": "#0b0d0c"
+        "backgroundColor": "#eef4ff"
+      },
+      {
+        "label": "menubar",
+        "title": "Quick focus",
+        "url": "index.html",
+        "width": 380,
+        "height": 420,
+        "visible": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": false,
+        "decorations": false,
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false
       }
     ],
     "security": {
@@ -31,6 +50,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -38,5 +58,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCQzcwQURDQzVGMDdFRDIKUldUU2Z2REYzQXJITy9WMWk2bkoySjhwZUZXQWZDNWhQR2VwYnVNZHp3aVV1Zy9pcG9UUzZ3aGIK",
+      "endpoints": [
+        "https://github.com/ducnguyen67201/NoGoalsNoGain/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

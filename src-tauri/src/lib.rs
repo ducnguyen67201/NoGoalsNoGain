@@ -2,7 +2,12 @@ mod domain;
 mod models;
 mod store;
 
-use std::{io, thread, time::Duration};
+use std::{
+    io,
+    sync::Mutex,
+    thread,
+    time::{Duration, Instant},
+};
 
 use domain::{
     build_dashboard, complete_goal as complete_goal_in_data, create_goal as create_goal_in_data,
@@ -14,11 +19,15 @@ use models::{Dashboard, GoalInput, ReviewInput};
 use store::AppState;
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, State, WebviewWindow,
+    tray::{MouseButton, MouseButtonState, TrayIconEvent},
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalRect, PhysicalSize, Rect, State,
+    WebviewWindow,
 };
 
 const TRAY_ID: &str = "focus-tray";
+const QUICK_PANEL_LABEL: &str = "menubar";
+const QUICK_PANEL_MARGIN: f64 = 8.0;
+const QUICK_PANEL_GAP: f64 = 7.0;
 
 #[tauri::command]
 fn get_dashboard(state: State<'_, AppState>) -> Result<Dashboard, String> {
@@ -148,21 +157,102 @@ fn update_tray_from_state(app: &AppHandle) {
 }
 
 fn show_dashboard(app: &AppHandle) {
+    hide_quick_panel(app);
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
         let _ = window.unminimize();
+        let _ = window.show();
         let _ = window.set_focus();
     }
 }
 
-fn toggle_dashboard(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
-        } else {
-            show_dashboard(app);
-        }
+#[tauri::command]
+fn open_main_dashboard(app: AppHandle) {
+    show_dashboard(&app);
+}
+
+#[tauri::command]
+fn close_quick_panel(app: AppHandle) {
+    hide_quick_panel_window(&app);
+}
+
+fn hide_quick_panel_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(QUICK_PANEL_LABEL) {
+        let _ = window.hide();
     }
+}
+
+fn hide_quick_panel(app: &AppHandle) {
+    hide_quick_panel_window(app);
+}
+
+fn quick_panel_position(
+    tray_rect: PhysicalRect<f64, u32>,
+    panel_size: PhysicalSize<u32>,
+    monitor_position: PhysicalPosition<i32>,
+    monitor_size: PhysicalSize<u32>,
+) -> PhysicalPosition<i32> {
+    let monitor_left = f64::from(monitor_position.x);
+    let monitor_top = f64::from(monitor_position.y);
+    let monitor_right = monitor_left + f64::from(monitor_size.width);
+    let monitor_bottom = monitor_top + f64::from(monitor_size.height);
+    let panel_width = f64::from(panel_size.width);
+    let panel_height = f64::from(panel_size.height);
+
+    let min_x = monitor_left + QUICK_PANEL_MARGIN;
+    let max_x = (monitor_right - panel_width - QUICK_PANEL_MARGIN).max(min_x);
+    let centered_x =
+        tray_rect.position.x + f64::from(tray_rect.size.width) / 2.0 - panel_width / 2.0;
+    let x = centered_x.clamp(min_x, max_x);
+
+    let tray_center_y = tray_rect.position.y + f64::from(tray_rect.size.height) / 2.0;
+    let monitor_center_y = monitor_top + f64::from(monitor_size.height) / 2.0;
+    let preferred_y = if tray_center_y <= monitor_center_y {
+        tray_rect.position.y + f64::from(tray_rect.size.height) + QUICK_PANEL_GAP
+    } else {
+        tray_rect.position.y - panel_height - QUICK_PANEL_GAP
+    };
+    let min_y = monitor_top + QUICK_PANEL_MARGIN;
+    let max_y = (monitor_bottom - panel_height - QUICK_PANEL_MARGIN).max(min_y);
+    let y = preferred_y.clamp(min_y, max_y);
+
+    PhysicalPosition::new(x.round() as i32, y.round() as i32)
+}
+
+fn toggle_quick_panel(app: &AppHandle, click_position: PhysicalPosition<f64>, tray_rect: Rect) {
+    let Some(window) = app.get_webview_window(QUICK_PANEL_LABEL) else {
+        return;
+    };
+
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
+        return;
+    }
+
+    let Ok(panel_size) = window.outer_size() else {
+        return;
+    };
+    let monitor = app
+        .monitor_from_point(click_position.x, click_position.y)
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        return;
+    };
+
+    let tray_rect = PhysicalRect {
+        position: tray_rect
+            .position
+            .to_physical::<f64>(monitor.scale_factor()),
+        size: tray_rect.size.to_physical::<u32>(monitor.scale_factor()),
+    };
+
+    let position =
+        quick_panel_position(tray_rect, panel_size, *monitor.position(), *monitor.size());
+    let _ = window.set_position(position);
+    let _ = app.emit_to(QUICK_PANEL_LABEL, "quick-panel-opened", ());
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 fn stop_focus_from_tray(app: &AppHandle) {
@@ -186,14 +276,14 @@ fn configure_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let stop_item = MenuItem::with_id(app, "stop", "Stop focus", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit No Goals No Gain", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_item, &stop_item, &quit_item])?;
-
     let state = app.state::<AppState>();
     let initial_title = state
         .lock()
         .map(|data| menu_bar_title(&data, now_timestamp()))
         .unwrap_or_else(|_| "No Goals No Gain".to_string());
+    let last_tray_click = Mutex::new(None::<Instant>);
 
-    TrayIconBuilder::with_id(TRAY_ID)
+    let mut tray_builder = tauri::tray::TrayIconBuilder::with_id(TRAY_ID)
         .title(&initial_title)
         .tooltip("No Goals No Gain")
         .menu(&menu)
@@ -204,24 +294,49 @@ fn configure_tray(app: &mut tauri::App) -> tauri::Result<()> {
             "quit" => quit_from_tray(app),
             _ => {}
         })
-        .on_tray_icon_event(|tray, event| {
-            if matches!(
-                event,
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
+        .on_tray_icon_event(move |tray, event| {
+            if let TrayIconEvent::Click {
+                position,
+                rect,
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let now = Instant::now();
+                let should_handle = last_tray_click
+                    .lock()
+                    .map(|mut previous| {
+                        let is_distinct_click = previous
+                            .map(|last| now.duration_since(last) >= Duration::from_millis(300))
+                            .unwrap_or(true);
+                        if is_distinct_click {
+                            *previous = Some(now);
+                        }
+                        is_distinct_click
+                    })
+                    .unwrap_or(false);
+                if !should_handle {
+                    return;
                 }
-            ) {
-                toggle_dashboard(tray.app_handle());
+                toggle_quick_panel(tray.app_handle(), position, rect);
             }
-        })
-        .build(app)?;
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray_builder = tray_builder.icon(icon);
+    }
+
+    tray_builder.build(app)?;
 
     Ok(())
 }
 
 fn should_show_on_launch(window: &WebviewWindow, state: &State<'_, AppState>) {
+    if std::env::args().any(|argument| argument == "--background") {
+        return;
+    }
+
     let is_first_run = state.lock().map(|data| !has_goals(&data)).unwrap_or(true);
 
     if is_first_run {
@@ -234,6 +349,12 @@ fn should_show_on_launch(window: &WebviewWindow, state: &State<'_, AppState>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--background"]),
+        ))
         .setup(|app| {
             let data_path = app
                 .path()
@@ -264,9 +385,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -278,8 +401,60 @@ pub fn run() {
             delete_goal,
             start_focus,
             stop_focus,
-            save_review
+            save_review,
+            open_main_dashboard,
+            close_quick_panel
         ])
         .run(tauri::generate_context!())
         .expect("error while running No Goals No Gain");
+}
+
+#[cfg(test)]
+mod quick_panel_tests {
+    use super::*;
+
+    #[test]
+    fn panel_is_centered_under_a_top_menu_bar_item() {
+        let position = quick_panel_position(
+            PhysicalRect {
+                position: PhysicalPosition::new(1200.0, 0.0),
+                size: PhysicalSize::new(180, 48),
+            },
+            PhysicalSize::new(760, 1120),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(3456, 2234),
+        );
+
+        assert_eq!(position, PhysicalPosition::new(910, 55));
+    }
+
+    #[test]
+    fn panel_is_clamped_inside_the_monitor() {
+        let position = quick_panel_position(
+            PhysicalRect {
+                position: PhysicalPosition::new(3360.0, 0.0),
+                size: PhysicalSize::new(96, 48),
+            },
+            PhysicalSize::new(760, 1120),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(3456, 2234),
+        );
+
+        assert_eq!(position, PhysicalPosition::new(2688, 55));
+    }
+
+    #[test]
+    fn panel_opens_above_a_bottom_tray() {
+        let position = quick_panel_position(
+            PhysicalRect {
+                position: PhysicalPosition::new(1200.0, 2160.0),
+                size: PhysicalSize::new(180, 48),
+            },
+            PhysicalSize::new(760, 1120),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(3456, 2234),
+        );
+
+        assert_eq!(position, PhysicalPosition::new(910, 1033));
+    }
 }
