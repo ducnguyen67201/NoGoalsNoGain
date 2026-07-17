@@ -40,7 +40,8 @@ an encrypted backup outside the repository.
 2. Commit and push the version change.
 3. Create and push a matching tag, for example `app-v0.1.1`.
 4. The `Release desktop app` workflow builds a universal macOS app and creates
-   a draft GitHub release.
+   a draft GitHub release. It also uploads `GoalBar-macOS.dmg`, the stable asset
+   used by the marketing page's download buttons.
 5. Review and publish the draft. Draft releases are intentionally invisible to
    the in-app updater.
 

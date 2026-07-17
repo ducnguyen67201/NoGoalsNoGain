@@ -14,10 +14,13 @@ goals, and builds a lightweight decision history through daily reviews.
 - Daily, weekly, and monthly goals with focus targets
 - Primary-goal selection and goal completion
 - Today/week/month focus summaries
+- Seven-day target colors and focus-velocity graph
+- Local thought-dump inbox with typed or dictated capture
+- Review-first handoff to Codex or Claude through their desktop deep links
 - Plan-versus-actual and completion insights
 - Daily founder closeout: shipped, blocker, and next focus
 - Local JSON persistence with atomic writes
-- No accounts, analytics, or cloud sync; network access is limited to update checks
+- No accounts, analytics, or cloud sync
 
 ## Stack
 
@@ -68,6 +71,11 @@ user's `~/Library/Application Support` directory.
 
 The state file is written through a temporary file and rename so an interrupted
 save is less likely to corrupt the existing data.
+
+Thought dumps stay in the same local state file. Choosing **Codex** or **Claude**
+opens a new assistant draft with the thought prefilled; the app never submits it
+automatically. Voice capture uses WebKit speech recognition when available and
+falls back to macOS Dictation (press Fn twice in the thought field).
 
 ## Product boundaries
 

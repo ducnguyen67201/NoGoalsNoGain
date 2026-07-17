@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>No Goals No Gain uses the microphone only when you choose to dictate a thought.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>No Goals No Gain converts speech into a thought dump when you tap the microphone.</string>
+</dict>
+</plist>

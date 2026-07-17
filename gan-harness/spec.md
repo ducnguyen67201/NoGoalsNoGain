@@ -1,38 +1,55 @@
-# Design Brief: Crisp Founder Focus Dashboard
+# Design Brief: Daily Momentum for GoalBar
 
-Refine the existing No Goals No Gain macOS dashboard so it feels notably crisper, more intentional, and more premium while retaining its light glassmorphism direction.
+Refine the existing No Goals No Gain macOS menu-bar panel so it feels quieter,
+cleaner, and more informative while adding a real seven-day momentum signal.
 
-The product is a local-first daily, weekly, and monthly goal tracker for developers and founders. The app lives in the macOS menu bar and the dashboard helps a user choose one primary outcome, start a focus session, review progress, and configure launch at login.
+The product is a local-first daily, weekly, and monthly goal tracker for
+developers and founders. The menu-bar panel should answer three questions at a
+glance: What matters now? Did I hit my daily target? Is my focus velocity moving
+in the right direction?
 
 ## Desired feeling
 
-- Calm founder command center, not a generic SaaS dashboard.
-- Light, airy, native to macOS, and visually precise.
-- Glass is structural and restrained: translucent surfaces, thin luminous borders, controlled shadows, and crisp typography. Avoid milky haze and excessive blur.
-- A distinctive indigo/periwinkle accent with a small mint signal color.
-- Strong information hierarchy that makes the primary outcome and next action obvious within one second.
+- A native macOS focus instrument, not a compressed dashboard.
+- Calm and spacious, but never empty or unfinished.
+- Restrained glass, crisp typography, and deliberate indigo/mint signals.
+- Historical data should feel glanceable and motivating rather than analytical.
 
-## Visual requirements
+## Momentum requirements
 
-- Sharpen typography, spacing, alignment, borders, and control states.
-- Reduce the current soft/foggy feeling and improve text contrast.
-- Preserve the compact 1040 × 760 desktop window and make the first viewport feel complete.
-- Give the sidebar, header, menu-bar preview, launch-at-login row, primary outcome, and stat cards a coherent visual system.
-- Use deliberate micro-interactions and focus/hover states without distracting motion.
-- Preserve accessible contrast, reduced-motion behavior, and clear keyboard focus.
-- Keep the interface light; no dark-theme redesign.
+- Derive the last seven local calendar days from stored focus sessions and
+  historical daily goals.
+- Give each day a compact color signal: vivid green only at 100% or more,
+  restrained pale green for partial progress, and a neutral unfilled state for
+  no progress or no target.
+- Show focused minutes as a lightweight seven-day velocity graph without adding
+  a chart dependency.
+- Do not exaggerate a few seconds into a full-height spike; velocity requires at
+  least five meaningful minutes and the chart keeps a 30-minute minimum scale.
+- Align every daily color cell directly beneath its corresponding graph point,
+  including on wide dashboard windows.
+- Surface a short trend label based on recent focus velocity.
+- Keep exact values available through accessible labels and tooltips.
+- Reuse the same data in the full dashboard Insights section.
+
+## Panel refinement
+
+- Preserve the current focus card as the strongest object.
+- Reduce the oversized empty space around a short goal list.
+- Keep Start/Stop Focus, Open Dashboard, Set a Goal, goal selection, update
+  installation, click-away dismissal, and the native right-click menu intact.
+- Keep the panel within a practical menu-bar popover height with goal scrolling.
+- Preserve the transparent outer window and crisp environmental silhouette.
 
 ## Functional constraints
 
-- Preserve every existing action, `data-action` hook, form, ID, and Tauri integration.
-- Launch at login, goal creation, primary goal selection, focus timer, completion, review, history, and menu-bar preview must continue to work.
-- Prefer targeted edits to `src/ui.ts` and `src/styles.css`; do not change Rust behavior unless required.
-- Do not add a remote font, image dependency, or heavyweight frontend package.
+- Data stays local; do not add accounts, analytics, sync, or network tracking.
+- Historical calculations must handle sessions crossing midnight.
+- Existing saved data must continue working without migration.
+- Preserve keyboard focus, reduced-motion behavior, and readable contrast.
+- Do not add a remote font, image dependency, or chart package.
 
 ## Success criterion
 
-The result should look polished enough for a startup launch screenshot and score at least 7.5/10 under the design rubric.
-
-## Menu-bar quick focus extension
-
-Add the app logo and live primary-goal text directly to the macOS menu bar. A left click should open a compact, Control Center-inspired popover anchored beneath the item. The popover must make the current focus, progress, Start/Stop Focus, Open Dashboard, and Set a Goal actions immediately available. Goals should remain usable in a compact scroll area, while right click preserves a native fallback menu.
+The result should communicate today plus seven-day momentum within one second,
+pass all Rust/frontend checks, and score at least 8.0/10 under the design rubric.

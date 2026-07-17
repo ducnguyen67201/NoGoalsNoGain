@@ -3,8 +3,9 @@ use std::{cmp::Reverse, collections::HashSet};
 use chrono::{Datelike, Duration, Local, LocalResult, NaiveDate, TimeZone, Utc};
 
 use crate::models::{
-    AppData, DailyReview, Dashboard, DashboardStats, FocusSession, FocusSessionView, Goal,
-    GoalInput, GoalPeriod, GoalStatus, GoalView, PeriodSummary, ReviewInput,
+    AppData, DailyProgress, DailyProgressStatus, DailyReview, Dashboard, DashboardStats,
+    FocusSession, FocusSessionView, Goal, GoalInput, GoalPeriod, GoalStatus, GoalView,
+    PeriodSummary, ReviewInput, ThoughtDump, ThoughtDumpInput,
 };
 
 const MENU_BAR_IDLE_TITLE_MAX_CHARS: usize = 9;
@@ -189,6 +190,30 @@ pub fn save_review(data: &mut AppData, input: ReviewInput, now: i64) -> Result<(
     Ok(())
 }
 
+pub fn save_thought_dump(
+    data: &mut AppData,
+    input: ThoughtDumpInput,
+    now: i64,
+) -> Result<(), String> {
+    data.thought_dumps.push(ThoughtDump {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: clean_required_text(&input.content, 4_000, "Thought")?,
+        source: input.source,
+        created_at: now,
+    });
+    Ok(())
+}
+
+pub fn delete_thought_dump(data: &mut AppData, thought_id: &str) -> Result<(), String> {
+    let previous_len = data.thought_dumps.len();
+    data.thought_dumps
+        .retain(|thought| thought.id != thought_id);
+    if data.thought_dumps.len() == previous_len {
+        return Err("Thought not found.".to_string());
+    }
+    Ok(())
+}
+
 pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
     let today_date = local_date(now);
     let today = today_date.format("%Y-%m-%d").to_string();
@@ -229,6 +254,10 @@ pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
     reviews.sort_by_key(|review| Reverse(review.updated_at));
     reviews.truncate(14);
 
+    let mut thought_dumps = data.thought_dumps.clone();
+    thought_dumps.sort_by_key(|thought| Reverse(thought.created_at));
+    thought_dumps.truncate(20);
+
     let (today_start, today_end) = period_bounds(GoalPeriod::Daily, today_date);
     let (week_start, week_end) = period_bounds(GoalPeriod::Weekly, today_date);
     let (month_start, month_end) = period_bounds(GoalPeriod::Monthly, today_date);
@@ -243,6 +272,7 @@ pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
         period_summary(data, period, period_start, period_end, now)
     })
     .collect();
+    let daily_progress = daily_progress(data, today_date, now);
 
     let active_goals = data
         .goals
@@ -263,6 +293,7 @@ pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
         active_session,
         recent_sessions,
         reviews,
+        thought_dumps,
         stats: DashboardStats {
             today_focus_seconds: focus_seconds_between(data, today_start, today_end, now),
             week_focus_seconds: focus_seconds_between(data, week_start, week_end, now),
@@ -271,6 +302,7 @@ pub fn build_dashboard(data: &AppData, now: i64) -> Dashboard {
             completed_goals,
             focus_streak_days: focus_streak_days(data, today_date, now),
             periods,
+            daily_progress,
         },
     }
 }
@@ -368,6 +400,56 @@ fn period_summary(
     }
 }
 
+fn daily_progress(data: &AppData, today: NaiveDate, now: i64) -> Vec<DailyProgress> {
+    (0..7)
+        .rev()
+        .map(|days_ago| {
+            let date = today - Duration::days(days_ago);
+            let (day_start, day_end) = period_bounds(GoalPeriod::Daily, date);
+            let planned_minutes = data
+                .goals
+                .iter()
+                .filter(|goal| {
+                    goal.period == GoalPeriod::Daily
+                        && goal.period_start == day_start
+                        && goal.period_end == day_end
+                })
+                .fold(0_u32, |total, goal| {
+                    total.saturating_add(goal.target_minutes)
+                });
+            let focus_seconds = focus_seconds_between(data, day_start, day_end, now);
+            let target_seconds = i64::from(planned_minutes).saturating_mul(60);
+            let progress_percent = if target_seconds > 0 {
+                focus_seconds
+                    .saturating_mul(100)
+                    .checked_div(target_seconds)
+                    .unwrap_or(0)
+                    .clamp(0, 100) as u32
+            } else {
+                0
+            };
+            let status = if planned_minutes == 0 {
+                DailyProgressStatus::Empty
+            } else if focus_seconds >= target_seconds {
+                DailyProgressStatus::Met
+            } else if focus_seconds > 0 {
+                DailyProgressStatus::Partial
+            } else {
+                DailyProgressStatus::Missed
+            };
+
+            DailyProgress {
+                date: date.format("%Y-%m-%d").to_string(),
+                focus_seconds,
+                planned_minutes,
+                progress_percent,
+                status,
+                is_today: date == today,
+            }
+        })
+        .collect()
+}
+
 fn session_view(data: &AppData, session: &FocusSession, now: i64) -> FocusSessionView {
     FocusSessionView {
         session: session.clone(),
@@ -416,6 +498,7 @@ fn overlap_seconds(first_start: i64, first_end: i64, second_start: i64, second_e
     first_end
         .min(second_end)
         .saturating_sub(first_start.max(second_start))
+        .max(0)
 }
 
 fn focus_streak_days(data: &AppData, today: NaiveDate, now: i64) -> usize {
@@ -538,6 +621,7 @@ fn local_midnight_timestamp(date: NaiveDate) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ThoughtSource;
 
     #[test]
     fn period_dates_cover_day_week_and_month() {
@@ -570,7 +654,76 @@ mod tests {
     fn overlap_only_counts_time_inside_the_window() {
         assert_eq!(overlap_seconds(100, 200, 150, 300), 50);
         assert_eq!(overlap_seconds(100, 200, 200, 300), 0);
+        assert_eq!(overlap_seconds(100, 200, 300, 400), 0);
         assert_eq!(overlap_seconds(120, 180, 100, 300), 60);
+    }
+
+    #[test]
+    fn daily_progress_tracks_targets_and_splits_sessions_at_midnight() {
+        let today = NaiveDate::from_ymd_opt(2026, 7, 16).unwrap();
+        let yesterday = today - Duration::days(1);
+        let today_start = local_midnight_timestamp(today);
+        let yesterday_start = local_midnight_timestamp(yesterday);
+        let tomorrow_start = local_midnight_timestamp(today + Duration::days(1));
+        let now = today_start + Duration::hours(12).num_seconds();
+        let mut data = AppData::default();
+
+        data.goals.push(Goal {
+            id: "yesterday-goal".to_string(),
+            title: "Close yesterday".to_string(),
+            period: GoalPeriod::Daily,
+            target_minutes: 60,
+            period_start: yesterday_start,
+            period_end: today_start,
+            created_at: yesterday_start,
+            completed_at: Some(today_start),
+            status: GoalStatus::Completed,
+            is_primary: false,
+        });
+        data.goals.push(Goal {
+            id: "today-goal".to_string(),
+            title: "Move today".to_string(),
+            period: GoalPeriod::Daily,
+            target_minutes: 90,
+            period_start: today_start,
+            period_end: tomorrow_start,
+            created_at: today_start,
+            completed_at: None,
+            status: GoalStatus::Active,
+            is_primary: true,
+        });
+        data.sessions.push(FocusSession {
+            id: "yesterday-session".to_string(),
+            goal_id: "yesterday-goal".to_string(),
+            started_at: today_start - Duration::minutes(60).num_seconds(),
+            ended_at: Some(today_start - Duration::minutes(15).num_seconds()),
+        });
+        data.sessions.push(FocusSession {
+            id: "midnight-session".to_string(),
+            goal_id: "today-goal".to_string(),
+            started_at: today_start - Duration::minutes(15).num_seconds(),
+            ended_at: Some(today_start + Duration::minutes(15).num_seconds()),
+        });
+        data.sessions.push(FocusSession {
+            id: "today-session".to_string(),
+            goal_id: "today-goal".to_string(),
+            started_at: today_start + Duration::hours(2).num_seconds(),
+            ended_at: Some(today_start + Duration::hours(2).num_seconds() + 900),
+        });
+
+        let progress = daily_progress(&data, today, now);
+        let yesterday_progress = &progress[5];
+        let today_progress = &progress[6];
+
+        assert_eq!(progress.len(), 7);
+        assert_eq!(progress[0].date, "2026-07-10");
+        assert_eq!(yesterday_progress.focus_seconds, 3_600);
+        assert_eq!(yesterday_progress.progress_percent, 100);
+        assert_eq!(yesterday_progress.status, DailyProgressStatus::Met);
+        assert_eq!(today_progress.focus_seconds, 1_800);
+        assert_eq!(today_progress.progress_percent, 33);
+        assert_eq!(today_progress.status, DailyProgressStatus::Partial);
+        assert!(today_progress.is_today);
     }
 
     #[test]
@@ -692,5 +845,62 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(data.active_session_id.as_deref(), Some("missing"));
+    }
+
+    #[test]
+    fn thought_dumps_are_trimmed_saved_and_returned_newest_first() {
+        let mut data = AppData::default();
+        save_thought_dump(
+            &mut data,
+            ThoughtDumpInput {
+                content: "  First idea  ".to_string(),
+                source: ThoughtSource::Typed,
+            },
+            100,
+        )
+        .unwrap();
+        save_thought_dump(
+            &mut data,
+            ThoughtDumpInput {
+                content: "Spoken follow-up".to_string(),
+                source: ThoughtSource::Speech,
+            },
+            200,
+        )
+        .unwrap();
+
+        let dashboard = build_dashboard(&data, 300);
+        assert_eq!(dashboard.thought_dumps.len(), 2);
+        assert_eq!(dashboard.thought_dumps[0].content, "Spoken follow-up");
+        assert_eq!(dashboard.thought_dumps[0].source, ThoughtSource::Speech);
+        assert_eq!(dashboard.thought_dumps[1].content, "First idea");
+    }
+
+    #[test]
+    fn empty_thought_dumps_are_rejected_and_saved_thoughts_can_be_deleted() {
+        let mut data = AppData::default();
+        assert!(save_thought_dump(
+            &mut data,
+            ThoughtDumpInput {
+                content: "   ".to_string(),
+                source: ThoughtSource::Typed,
+            },
+            100,
+        )
+        .is_err());
+
+        save_thought_dump(
+            &mut data,
+            ThoughtDumpInput {
+                content: "Keep this briefly".to_string(),
+                source: ThoughtSource::Typed,
+            },
+            200,
+        )
+        .unwrap();
+        let id = data.thought_dumps[0].id.clone();
+        delete_thought_dump(&mut data, &id).unwrap();
+        assert!(data.thought_dumps.is_empty());
+        assert!(delete_thought_dump(&mut data, &id).is_err());
     }
 }

@@ -2,14 +2,21 @@
 
 Status: complete
 
-Implemented a macOS menu-bar quick-focus experience for No Goals No Gain:
+Implemented the daily momentum refinement for No Goals No Gain:
 
-- app icon plus live primary-goal title in the menu bar
-- left-click Control Center-style popover anchored to the tray item
-- current-focus progress, Start/Stop Focus, Set a Goal, and Open Dashboard actions
-- scrollable active-goal list with primary-goal and quick-focus controls
-- click-away dismissal and native right-click fallback menu
-- monitor-aware panel positioning with unit coverage
-- notch-safe compact menu-bar copy and adaptive popover height
+- tested seven-day local-calendar aggregation from goals and focus sessions
+- correct splitting of focus sessions that cross midnight
+- neutral, partial-mint, and saturated-green daily target states
+- inline SVG focus-velocity graph with no chart dependency
+- recent-versus-previous three-day velocity summary
+- compact momentum card in the menu-bar quick panel
+- larger historical signal in dashboard Insights
+- reduced one-goal panel height with a 7px post-goal gap
+- exact per-day values through accessible labels and native tooltips
+- 30-minute minimum graph scale so sub-minute activity cannot create a spike
+- five-minute threshold before declaring positive momentum
+- exact graph-to-day alignment across wide dashboard layouts
+- neutral line and no area fill while there is no meaningful velocity signal
 
-The final packaged app was exercised on macOS with real pointer events.
+The final layouts were exercised at 380 × 492, 1040 × 760, and 1440 × 900 with
+browser assertions and screenshots.

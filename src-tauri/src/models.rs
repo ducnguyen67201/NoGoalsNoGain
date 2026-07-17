@@ -49,6 +49,22 @@ pub struct DailyReview {
     pub updated_at: i64,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThoughtSource {
+    Typed,
+    Speech,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThoughtDump {
+    pub id: String,
+    pub content: String,
+    pub source: ThoughtSource,
+    pub created_at: i64,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppData {
@@ -61,6 +77,8 @@ pub struct AppData {
     #[serde(default)]
     pub reviews: Vec<DailyReview>,
     #[serde(default)]
+    pub thought_dumps: Vec<ThoughtDump>,
+    #[serde(default)]
     pub active_session_id: Option<String>,
 }
 
@@ -71,6 +89,7 @@ impl Default for AppData {
             goals: Vec::new(),
             sessions: Vec::new(),
             reviews: Vec::new(),
+            thought_dumps: Vec::new(),
             active_session_id: None,
         }
     }
@@ -96,6 +115,20 @@ pub struct ReviewInput {
     pub shipped: String,
     pub blocker: String,
     pub next_focus: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThoughtDumpInput {
+    pub content: String,
+    pub source: ThoughtSource,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AssistantProvider {
+    Codex,
+    Claude,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -125,6 +158,26 @@ pub struct PeriodSummary {
     pub total_goals: usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DailyProgressStatus {
+    Empty,
+    Missed,
+    Partial,
+    Met,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyProgress {
+    pub date: String,
+    pub focus_seconds: i64,
+    pub planned_minutes: u32,
+    pub progress_percent: u32,
+    pub status: DailyProgressStatus,
+    pub is_today: bool,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DashboardStats {
@@ -135,6 +188,7 @@ pub struct DashboardStats {
     pub completed_goals: usize,
     pub focus_streak_days: usize,
     pub periods: Vec<PeriodSummary>,
+    pub daily_progress: Vec<DailyProgress>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -147,5 +201,27 @@ pub struct Dashboard {
     pub active_session: Option<FocusSessionView>,
     pub recent_sessions: Vec<FocusSessionView>,
     pub reviews: Vec<DailyReview>,
+    pub thought_dumps: Vec<ThoughtDump>,
     pub stats: DashboardStats,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn state_from_before_thought_dumps_still_loads() {
+        let data: AppData = serde_json::from_str(
+            r#"{
+                "schemaVersion": 1,
+                "goals": [],
+                "sessions": [],
+                "reviews": [],
+                "activeSessionId": null
+            }"#,
+        )
+        .unwrap();
+
+        assert!(data.thought_dumps.is_empty());
+    }
 }

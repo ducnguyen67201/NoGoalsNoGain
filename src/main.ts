@@ -16,11 +16,14 @@ import {
 
 import type {
   AppUpdateState,
+  AssistantProvider,
   Dashboard,
   GoalInput,
   GoalPeriod,
   ReviewInput,
   SystemPreferences,
+  ThoughtComposerState,
+  ThoughtDumpInput,
 } from "./types";
 import {
   loadingMarkup,
@@ -35,6 +38,55 @@ const goalForm = document.querySelector<HTMLFormElement>("#goal-form");
 const toastElement = document.querySelector<HTMLDivElement>("#toast");
 const currentWindow = getCurrentWindow();
 const isMenuBarView = currentWindow.label === "menubar";
+
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  readonly isFinal: boolean;
+  readonly length: number;
+  readonly [index: number]: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionResultListLike {
+  readonly length: number;
+  readonly [index: number]: SpeechRecognitionResultLike;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  readonly results: SpeechRecognitionResultListLike;
+}
+
+interface SpeechRecognitionErrorEventLike extends Event {
+  readonly error: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function speechRecognitionConstructor(): SpeechRecognitionConstructor | null {
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return (
+    speechWindow.SpeechRecognition ??
+    speechWindow.webkitSpeechRecognition ??
+    null
+  );
+}
 
 document.body.classList.toggle("is-menu-popover", isMenuBarView);
 document.documentElement.classList.toggle("is-menu-popover", isMenuBarView);
@@ -52,6 +104,15 @@ let appUpdateState: AppUpdateState = {
   progress: null,
   error: null,
 };
+let thoughtComposer: ThoughtComposerState = {
+  isOpen: false,
+  draft: "",
+  isListening: false,
+  speechSupported: speechRecognitionConstructor() !== null,
+  message: null,
+};
+let speechRecognition: SpeechRecognitionLike | null = null;
+let thoughtSpeechWasUsed = false;
 
 function render(data: Dashboard): void {
   if (!appElement) {
@@ -59,7 +120,7 @@ function render(data: Dashboard): void {
   }
   latestDashboard = data;
   appElement.innerHTML = isMenuBarView
-    ? renderMenuBarPopover(data, appUpdateState)
+    ? renderMenuBarPopover(data, appUpdateState, thoughtComposer)
     : renderDashboard(data, systemPreferences, appUpdateState);
 
   if (isMenuBarView) {
@@ -68,17 +129,18 @@ function render(data: Dashboard): void {
     ).length;
     const basePanelHeight =
       activeGoalCount === 0
-        ? 450
-        : Math.min(560, 420 + Math.max(0, activeGoalCount - 1) * 58);
+        ? 430
+        : Math.min(500, 370 + Math.max(0, activeGoalCount - 1) * 52);
     const showsUpdatePrompt = [
       "available",
       "downloading",
       "installing",
       "error",
     ].includes(appUpdateState.phase);
+    const momentumHeight = data.stats.dailyProgress.length > 0 ? 122 : 0;
     const panelHeight = Math.min(
-      620,
-      basePanelHeight + (showsUpdatePrompt ? 66 : 0),
+      640,
+      basePanelHeight + momentumHeight + (showsUpdatePrompt ? 66 : 0),
     );
     void currentWindow
       .setSize(new LogicalSize(380, panelHeight))
@@ -307,6 +369,226 @@ function openGoalDialog(period?: GoalPeriod): void {
   }, 50);
 }
 
+function focusThoughtInput(): void {
+  window.setTimeout(() => {
+    const input = document.querySelector<HTMLTextAreaElement>(
+      "#quick-thought-input",
+    );
+    input?.focus();
+    input?.setSelectionRange(input.value.length, input.value.length);
+  }, 30);
+}
+
+function stopSpeechCapture(): void {
+  const recognition = speechRecognition;
+  speechRecognition = null;
+  if (recognition) {
+    recognition.onend = null;
+    try {
+      recognition.stop();
+    } catch {
+      // A rapid second click can arrive before WebKit finishes starting.
+    }
+  }
+  thoughtComposer = { ...thoughtComposer, isListening: false };
+}
+
+function openThoughtComposer(): void {
+  thoughtComposer = {
+    ...thoughtComposer,
+    isOpen: true,
+    message: null,
+  };
+  if (latestDashboard) {
+    render(latestDashboard);
+  }
+  focusThoughtInput();
+}
+
+function closeThoughtComposer(): void {
+  stopSpeechCapture();
+  thoughtComposer = {
+    ...thoughtComposer,
+    isOpen: false,
+    message: null,
+  };
+  if (latestDashboard) {
+    render(latestDashboard);
+  }
+}
+
+function speechErrorMessage(error: string): string {
+  if (error === "not-allowed" || error === "service-not-allowed") {
+    return "Microphone access was not granted. Press Fn twice to use Mac Dictation.";
+  }
+  if (error === "no-speech") {
+    return "I didn’t hear anything. Tap the mic to try again.";
+  }
+  return "Speech capture paused. You can still press Fn twice for Mac Dictation.";
+}
+
+function toggleThoughtSpeech(): void {
+  if (thoughtComposer.isListening) {
+    stopSpeechCapture();
+    thoughtComposer = {
+      ...thoughtComposer,
+      message: "Speech added. Keep typing or save when it feels complete.",
+    };
+    if (latestDashboard) {
+      render(latestDashboard);
+    }
+    focusThoughtInput();
+    return;
+  }
+
+  const Recognition = speechRecognitionConstructor();
+  if (!Recognition) {
+    thoughtComposer = {
+      ...thoughtComposer,
+      message: "Field ready—press Fn twice and speak with Mac Dictation.",
+    };
+    if (latestDashboard) {
+      render(latestDashboard);
+    }
+    focusThoughtInput();
+    return;
+  }
+
+  const startingDraft = thoughtComposer.draft.trimEnd();
+  const recognition = new Recognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = navigator.language || "en-US";
+  recognition.onstart = () => {
+    thoughtComposer = {
+      ...thoughtComposer,
+      isListening: true,
+      message: null,
+    };
+    if (latestDashboard) {
+      render(latestDashboard);
+    }
+  };
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let index = 0; index < event.results.length; index += 1) {
+      transcript += event.results[index]?.[0]?.transcript ?? "";
+    }
+    const spokenText = transcript.trim();
+    thoughtComposer.draft = [startingDraft, spokenText]
+      .filter(Boolean)
+      .join(startingDraft ? " " : "");
+    thoughtSpeechWasUsed ||= spokenText.length > 0;
+    const input = document.querySelector<HTMLTextAreaElement>(
+      "#quick-thought-input",
+    );
+    if (input) {
+      input.value = thoughtComposer.draft;
+    }
+  };
+  recognition.onerror = (event) => {
+    speechRecognition = null;
+    thoughtComposer = {
+      ...thoughtComposer,
+      isListening: false,
+      message: speechErrorMessage(event.error),
+    };
+    if (latestDashboard) {
+      render(latestDashboard);
+    }
+    focusThoughtInput();
+  };
+  recognition.onend = () => {
+    if (speechRecognition !== recognition) {
+      return;
+    }
+    speechRecognition = null;
+    thoughtComposer = {
+      ...thoughtComposer,
+      isListening: false,
+      message: thoughtSpeechWasUsed
+        ? "Speech added. Keep typing or save when it feels complete."
+        : thoughtComposer.message,
+    };
+    if (latestDashboard) {
+      render(latestDashboard);
+    }
+    focusThoughtInput();
+  };
+
+  speechRecognition = recognition;
+  thoughtComposer = {
+    ...thoughtComposer,
+    isListening: true,
+    message: null,
+  };
+  if (latestDashboard) {
+    render(latestDashboard);
+  }
+
+  try {
+    recognition.start();
+  } catch (error) {
+    speechRecognition = null;
+    thoughtComposer = {
+      ...thoughtComposer,
+      isListening: false,
+      message: speechErrorMessage(String(error)),
+    };
+    if (latestDashboard) {
+      render(latestDashboard);
+    }
+    focusThoughtInput();
+  }
+}
+
+async function saveThought(
+  provider?: AssistantProvider,
+): Promise<void> {
+  const content = thoughtComposer.draft.trim();
+  if (!content) {
+    showToast("Write or dictate a thought first.", "error");
+    focusThoughtInput();
+    return;
+  }
+
+  stopSpeechCapture();
+  const input: ThoughtDumpInput = {
+    content,
+    source: thoughtSpeechWasUsed ? "speech" : "typed",
+  };
+
+  let savedDashboard: Dashboard;
+  try {
+    savedDashboard = await invoke<Dashboard>("save_thought_dump", { input });
+  } catch (error) {
+    showToast(String(error), "error");
+    return;
+  }
+
+  thoughtComposer = {
+    ...thoughtComposer,
+    isOpen: false,
+    draft: "",
+    isListening: false,
+    message: null,
+  };
+  thoughtSpeechWasUsed = false;
+  render(savedDashboard);
+
+  if (!provider) {
+    showToast("Thought saved on this Mac.");
+    return;
+  }
+
+  try {
+    await invoke("open_in_assistant", { provider, content });
+    showToast(`Saved and opened in ${provider === "codex" ? "Codex" : "Claude"}.`);
+  } catch (error) {
+    showToast(`Thought saved, but the assistant could not open: ${String(error)}`, "error");
+  }
+}
+
 document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -325,6 +607,55 @@ document.addEventListener("click", (event) => {
     case "new-goal":
       openGoalDialog(actionElement.dataset.period as GoalPeriod | undefined);
       break;
+    case "open-thought":
+      openThoughtComposer();
+      break;
+    case "close-thought":
+      closeThoughtComposer();
+      break;
+    case "toggle-thought-speech":
+      toggleThoughtSpeech();
+      break;
+    case "save-thought":
+      void saveThought();
+      break;
+    case "send-thought": {
+      const provider = actionElement.dataset.provider as
+        | AssistantProvider
+        | undefined;
+      if (provider === "codex" || provider === "claude") {
+        void saveThought(provider);
+      }
+      break;
+    }
+    case "load-thought": {
+      const thoughtId = actionElement.dataset.thoughtId;
+      const thought = latestDashboard?.thoughtDumps.find(
+        (item) => item.id === thoughtId,
+      );
+      if (thought) {
+        thoughtSpeechWasUsed = thought.source === "speech";
+        thoughtComposer = {
+          ...thoughtComposer,
+          draft: thought.content,
+          message: "Loaded. Add context or hand it to an assistant.",
+        };
+        render(latestDashboard!);
+        focusThoughtInput();
+      }
+      break;
+    }
+    case "delete-thought": {
+      const thoughtId = actionElement.dataset.thoughtId;
+      if (thoughtId) {
+        void runCommand(
+          "delete_thought_dump",
+          { thoughtId },
+          "Thought deleted.",
+        );
+      }
+      break;
+    }
     case "close-goal-dialog":
       goalDialog?.close();
       break;
@@ -376,6 +707,16 @@ document.addEventListener("click", (event) => {
       }
       break;
     }
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const target = event.target;
+  if (
+    target instanceof HTMLTextAreaElement &&
+    target.matches("[data-thought-draft]")
+  ) {
+    thoughtComposer.draft = target.value;
   }
 });
 
@@ -454,7 +795,13 @@ if (isMenuBarView) {
   window.addEventListener("blur", () => {
     window.setTimeout(() => {
       const hasSettledAfterOpening = performance.now() - openedAt > 350;
-      if (isPanelOpen && hasSettledAfterOpening && !goalDialog?.open) {
+      if (
+        isPanelOpen &&
+        hasSettledAfterOpening &&
+        !goalDialog?.open &&
+        !thoughtComposer.isOpen &&
+        !thoughtComposer.isListening
+      ) {
         isPanelOpen = false;
         void invoke("close_quick_panel");
       }

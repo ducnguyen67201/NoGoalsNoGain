@@ -1,25 +1,35 @@
-# GAN Design Evaluation Rubric
+# GAN Design Evaluation Rubric — Daily Momentum
 
 Score each category from 0–10, provide concise evidence, calculate the weighted score, and list the highest-impact changes required for the next iteration.
 
 ### Design Quality (weight: 0.35)
 
-Judge hierarchy, composition, typography, contrast, spacing, color discipline, and whether the interface feels crisp and premium at 1040 × 760.
+Judge hierarchy, composition, typography, contrast, spacing, color discipline,
+and whether the quick panel communicates today plus seven-day momentum without
+feeling crowded.
 
 ### Originality (weight: 0.30)
 
-Judge whether this has a memorable founder-focus identity rather than looking like a stock dashboard template. Reward distinctive but usable details.
+Judge whether the day signals and velocity graph create a memorable founder-focus
+instrument rather than a stock productivity heatmap or generic analytics card.
 
 ### Craft (weight: 0.25)
 
-Judge alignment, optical balance, border/shadow consistency, state design, responsive behavior, motion restraint, and implementation polish across both the dashboard and the compact menu-bar popover.
+Judge alignment, optical balance, border/shadow consistency, color-state nuance,
+graph legibility, responsive behavior, motion restraint, and implementation
+polish across the dashboard and compact menu-bar panel.
+
+Reject charts that visually amplify sub-minute noise or separate day cells from
+their corresponding graph points on wide layouts.
 
 ### Functionality (weight: 0.10)
 
-Judge whether existing interactions, accessibility semantics, desktop viewport behavior, and build integrity are preserved. Verify that the logo + goal title open a positioned quick-focus popover, Set a Goal opens its form, Open Dashboard hands off correctly, click-away dismisses the panel, and right click retains the native tray menu.
+Judge whether seven local days are calculated correctly, midnight overlap is
+handled, vivid green appears only at target attainment, exact day values remain
+accessible, and every existing interaction and build check is preserved.
 
 ## Pass threshold
 
-Weighted score ≥ 7.5/10.
+Weighted score ≥ 8.0/10.
 
 The evaluator should ask: “Would this be credible in a design-award shortlist or a polished startup launch?”

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en" class="is-menu-popover">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoalBar momentum preview</title>
+    <style>
+      html.is-menu-popover,
+      body.is-menu-popover,
+      body.is-menu-popover #app {
+        width: 380px;
+        height: 640px;
+      }
+    </style>
+    <script type="module">
+      import "../src/styles.css";
+      import {
+        renderDashboard,
+        renderMenuBarPopover,
+      } from "../src/ui.ts";
+
+      const search = new URLSearchParams(window.location.search);
+      const lowActivity = search.has("low");
+      const dailyProgress = (lowActivity
+        ? [
+            ["2026-07-10", 0, 0, 0, "empty"],
+            ["2026-07-11", 0, 0, 0, "empty"],
+            ["2026-07-12", 0, 0, 0, "empty"],
+            ["2026-07-13", 0, 0, 0, "empty"],
+            ["2026-07-14", 0, 0, 0, "empty"],
+            ["2026-07-15", 0, 0, 0, "empty"],
+            ["2026-07-16", 15, 90, 0, "partial"],
+          ]
+        : [
+            ["2026-07-10", 0, 0, 0, "empty"],
+            ["2026-07-11", 1800, 60, 50, "partial"],
+            ["2026-07-12", 5400, 90, 100, "met"],
+            ["2026-07-13", 0, 90, 0, "missed"],
+            ["2026-07-14", 3600, 90, 67, "partial"],
+            ["2026-07-15", 7200, 90, 100, "met"],
+            ["2026-07-16", 1800, 90, 33, "partial"],
+          ]
+      ).map(([date, focusSeconds, plannedMinutes, progressPercent, status]) => ({
+        date,
+        focusSeconds,
+        plannedMinutes,
+        progressPercent,
+        status,
+        isToday: date === "2026-07-16",
+      }));
+
+      const goal = {
+        id: "preview-goal",
+        title: "Ship to 10 users",
+        period: "daily",
+        targetMinutes: 90,
+        periodStart: 1784185200,
+        periodEnd: 1784271600,
+        createdAt: 1784185200,
+        completedAt: null,
+        status: "active",
+        isPrimary: true,
+        trackedSeconds: lowActivity ? 15 : 1800,
+      };
+
+      const dashboard = {
+        now: 1784228400,
+        today: "2026-07-16",
+        menuBarTitle: "Ship to…",
+        goals: [goal],
+        activeSession: null,
+        recentSessions: [],
+        reviews: [],
+        thoughtDumps: [
+          {
+            id: "thought-2",
+            content: "The onboarding should feel like a tiny win, not another setup chore.",
+            source: "speech",
+            createdAt: 1784227200,
+          },
+          {
+            id: "thought-1",
+            content: "Talk to three users before changing the dashboard again.",
+            source: "typed",
+            createdAt: 1784140800,
+          },
+        ],
+        stats: {
+          todayFocusSeconds: lowActivity ? 15 : 1800,
+          weekFocusSeconds: lowActivity ? 15 : 12600,
+          monthFocusSeconds: lowActivity ? 15 : 12600,
+          activeGoals: 1,
+          completedGoals: 2,
+          focusStreakDays: 3,
+          periods: [],
+          dailyProgress,
+        },
+      };
+
+      const update = {
+        phase: "idle",
+        version: null,
+        notes: null,
+        progress: null,
+        error: null,
+      };
+
+      const isDashboard = search.has("dashboard");
+      const thoughtComposer = {
+        isOpen: search.has("thought"),
+        draft: search.has("thought")
+          ? "I keep thinking the product needs a calmer first-run experience that gets founders to one clear outcome faster."
+          : "",
+        isListening: search.has("listening"),
+        speechSupported: true,
+        message: null,
+      };
+
+      if (isDashboard) {
+        document.documentElement.classList.remove("is-menu-popover");
+        document.body.classList.remove("is-menu-popover");
+        document.querySelector("#app").innerHTML = renderDashboard(
+          dashboard,
+          { launchAtLogin: true },
+          update,
+        );
+      } else {
+        document.body.classList.add("is-menu-popover");
+        document.querySelector("#app").innerHTML = renderMenuBarPopover(
+          dashboard,
+          update,
+          thoughtComposer,
+        );
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

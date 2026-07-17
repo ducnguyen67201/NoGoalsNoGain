@@ -1,4 +1,5 @@
 mod domain;
+pub mod integrations;
 mod models;
 mod store;
 
@@ -11,11 +12,12 @@ use std::{
 
 use domain::{
     build_dashboard, complete_goal as complete_goal_in_data, create_goal as create_goal_in_data,
-    delete_goal as delete_goal_in_data, has_goals, menu_bar_title, now_timestamp,
-    save_review as save_review_in_data, set_primary_goal as set_primary_goal_in_data,
+    delete_goal as delete_goal_in_data, delete_thought_dump as delete_thought_dump_in_data,
+    has_goals, menu_bar_title, now_timestamp, save_review as save_review_in_data,
+    save_thought_dump as save_thought_dump_in_data, set_primary_goal as set_primary_goal_in_data,
     start_focus as start_focus_in_data, stop_active_session, update_goal as update_goal_in_data,
 };
-use models::{Dashboard, GoalInput, ReviewInput};
+use models::{AssistantProvider, Dashboard, GoalInput, ReviewInput, ThoughtDumpInput};
 use store::AppState;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -116,6 +118,82 @@ fn save_review(
     mutate_state(&state, &app, |data, now| {
         save_review_in_data(data, input, now)
     })
+}
+
+#[tauri::command]
+fn save_thought_dump(
+    input: ThoughtDumpInput,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Dashboard, String> {
+    mutate_state(&state, &app, |data, now| {
+        save_thought_dump_in_data(data, input, now)
+    })
+}
+
+#[tauri::command]
+fn delete_thought_dump(
+    thought_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Dashboard, String> {
+    mutate_state(&state, &app, |data, _| {
+        delete_thought_dump_in_data(data, &thought_id)
+    })
+}
+
+fn percent_encode_query(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('%');
+            encoded.push(char::from(HEX[(byte >> 4) as usize]));
+            encoded.push(char::from(HEX[(byte & 0x0f) as usize]));
+        }
+    }
+    encoded
+}
+
+fn assistant_deep_link(provider: AssistantProvider, content: &str) -> Result<String, String> {
+    let thought = content.trim();
+    if thought.is_empty() {
+        return Err("Write or dictate a thought first.".to_string());
+    }
+    if thought.chars().count() > 4_000 {
+        return Err("Thought must be 4,000 characters or fewer.".to_string());
+    }
+
+    let prompt = format!(
+        "This is a raw thought dump from No Goals No Gain. Help me preserve the idea, identify the next concrete action, and—if it fits—turn it into one crisp daily, weekly, or monthly goal. Keep it practical and concise.\n\nRaw thought:\n{thought}"
+    );
+    let encoded_prompt = percent_encode_query(&prompt);
+    Ok(match provider {
+        AssistantProvider::Codex => format!("codex://new?prompt={encoded_prompt}"),
+        AssistantProvider::Claude => format!("claude://claude.ai/new?q={encoded_prompt}"),
+    })
+}
+
+#[tauri::command]
+fn open_in_assistant(provider: AssistantProvider, content: String) -> Result<(), String> {
+    let url = assistant_deep_link(provider, &content)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("/usr/bin/open")
+            .arg(url)
+            .spawn()
+            .map_err(|error| format!("Could not open the assistant: {error}"))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = url;
+        Err("Assistant handoff is currently available on macOS.".to_string())
+    }
 }
 
 fn mutate_state<F>(
@@ -402,6 +480,9 @@ pub fn run() {
             start_focus,
             stop_focus,
             save_review,
+            save_thought_dump,
+            delete_thought_dump,
+            open_in_assistant,
             open_main_dashboard,
             close_quick_panel
         ])
@@ -456,5 +537,21 @@ mod quick_panel_tests {
         );
 
         assert_eq!(position, PhysicalPosition::new(910, 1033));
+    }
+
+    #[test]
+    fn assistant_links_prefill_without_auto_sending() {
+        let codex = assistant_deep_link(AssistantProvider::Codex, "Ship this & learn").unwrap();
+        let claude = assistant_deep_link(AssistantProvider::Claude, "Ship this & learn").unwrap();
+
+        assert!(codex.starts_with("codex://new?prompt="));
+        assert!(claude.starts_with("claude://claude.ai/new?q="));
+        assert!(codex.contains("Ship%20this%20%26%20learn"));
+        assert!(!codex.contains(' '));
+    }
+
+    #[test]
+    fn assistant_links_reject_empty_thoughts() {
+        assert!(assistant_deep_link(AssistantProvider::Codex, "   ").is_err());
     }
 }

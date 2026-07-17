@@ -52,3 +52,19 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           args: "--target universal-apple-darwin"
+
+      - name: Upload stable marketing download
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="$(node -p 'JSON.parse(require("fs").readFileSync("src-tauri/tauri.conf.json", "utf8")).version')"
+          dmg="$(find src-tauri/target -path '*/release/bundle/dmg/*.dmg' -type f -print -quit)"
+
+          if [[ -z "$dmg" ]]; then
+            echo "The macOS DMG was not generated."
+            exit 1
+          fi
+
+          cp "$dmg" GoalBar-macOS.dmg
+          gh release upload "app-v${version}" "GoalBar-macOS.dmg#GoalBar for macOS" --clobber

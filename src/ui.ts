@@ -1,9 +1,11 @@
 import type {
   AppUpdateState,
+  DailyProgress,
   Dashboard,
   Goal,
   GoalPeriod,
   SystemPreferences,
+  ThoughtComposerState,
 } from "./types";
 
 function escapeHtml(value: string): string {
@@ -35,6 +37,13 @@ function formatDuration(totalSeconds: number, includeSeconds = false): string {
     return `${hours}h ${minutes}m`;
   }
   return `${minutes}m`;
+}
+
+function formatMomentumDuration(totalSeconds: number): string {
+  if (totalSeconds > 0 && totalSeconds < 60) {
+    return "<1m";
+  }
+  return formatDuration(totalSeconds);
 }
 
 function formatDate(timestamp: number): string {
@@ -410,6 +419,174 @@ function renderGoals(data: Dashboard): string {
   `;
 }
 
+function dailyProgressDate(date: string): Date {
+  return new Date(`${date}T12:00:00`);
+}
+
+function dailyProgressLabel(day: DailyProgress): string {
+  const date = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(dailyProgressDate(day.date));
+  const focused = formatDuration(day.focusSeconds);
+
+  if (day.plannedMinutes === 0) {
+    return `${date}: ${focused} focused, no daily target`;
+  }
+
+  return `${date}: ${focused} of ${day.plannedMinutes}m, ${day.progressPercent}%`;
+}
+
+function velocitySummary(days: DailyProgress[]): {
+  label: string;
+  tone: "up" | "down" | "steady";
+} {
+  const total = (items: DailyProgress[]): number =>
+    items.reduce((sum, day) => sum + day.focusSeconds, 0);
+  const meaningfulFocusSeconds = 5 * 60;
+  const previousTotal = total(days.slice(0, 3));
+  const recentTotal = total(days.slice(-3));
+
+  if (previousTotal < meaningfulFocusSeconds) {
+    return recentTotal >= meaningfulFocusSeconds
+      ? { label: "Building momentum", tone: "up" }
+      : { label: "No signal yet", tone: "steady" };
+  }
+
+  const change = Math.round(
+    ((recentTotal - previousTotal) / previousTotal) * 100,
+  );
+  if (Math.abs(change) < 5) {
+    return { label: "Steady velocity", tone: "steady" };
+  }
+
+  return {
+    label: `${change > 0 ? "+" : ""}${change}% velocity`,
+    tone: change > 0 ? "up" : "down",
+  };
+}
+
+function renderVelocityChart(
+  days: DailyProgress[],
+  gradientId: string,
+): string {
+  const width = 280;
+  const height = 68;
+  const horizontalPadding = width / 14;
+  const top = 7;
+  const baseline = 59;
+  const maxSeconds = Math.max(
+    30 * 60,
+    ...days.map((day) => day.focusSeconds),
+  );
+  const step =
+    days.length > 1
+      ? (width - horizontalPadding * 2) / (days.length - 1)
+      : 0;
+  const points = days.map((day, index) => {
+    const x = horizontalPadding + step * index;
+    const y =
+      baseline -
+      (Math.max(0, day.focusSeconds) / maxSeconds) * (baseline - top);
+    return { x, y };
+  });
+  const pointList = points
+    .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+    .join(" ");
+  const areaPath =
+    points.length > 0
+      ? `M ${points[0].x.toFixed(1)} ${baseline} L ${pointList
+          .split(",")
+          .join(" ")} L ${points[points.length - 1].x.toFixed(1)} ${baseline} Z`
+      : "";
+  const accessibleSummary = days
+    .map((day) => dailyProgressLabel(day))
+    .join("; ");
+
+  return `
+    <svg class="velocity-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Seven-day focus velocity">
+      <title>${escapeHtml(accessibleSummary)}</title>
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#48b991" stop-opacity="0.24" />
+          <stop offset="100%" stop-color="#48b991" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <path class="velocity-grid" d="M 8 ${baseline} H 272" />
+      ${areaPath ? `<path class="velocity-area" d="${areaPath}" fill="url(#${gradientId})" />` : ""}
+      ${points.length > 0 ? `<polyline class="velocity-line" points="${pointList}" />` : ""}
+      ${points
+        .map(
+          (point, index) => `
+            <circle
+              class="velocity-point status-${days[index].status}"
+              cx="${point.x.toFixed(1)}"
+              cy="${point.y.toFixed(1)}"
+              r="${days[index].isToday ? 3.4 : 2.5}"
+            />`,
+        )
+        .join("")}
+    </svg>
+  `;
+}
+
+function renderDaySignals(days: DailyProgress[]): string {
+  return `
+    <div class="day-signals" aria-label="Daily target progress">
+      ${days
+        .map((day) => {
+          const dayName = new Intl.DateTimeFormat(undefined, {
+            weekday: "narrow",
+          }).format(dailyProgressDate(day.date));
+          const strength = (0.12 + day.progressPercent * 0.0032).toFixed(2);
+          const label = dailyProgressLabel(day);
+          return `
+            <span
+              class="day-signal status-${day.status} ${day.isToday ? "is-today" : ""}"
+              style="--signal-strength: ${strength}"
+              title="${escapeHtml(label)}"
+              role="img"
+              aria-label="${escapeHtml(label)}"
+            >
+              <i aria-hidden="true"><b></b></i>
+              <small>${escapeHtml(dayName)}</small>
+            </span>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDashboardMomentum(data: Dashboard): string {
+  const days = data.stats.dailyProgress;
+  const velocity = velocitySummary(days);
+  const today = days.find((day) => day.isToday) ?? days[days.length - 1];
+
+  return `
+    <article class="momentum-card glass-panel is-${velocity.tone}" aria-labelledby="momentum-title">
+      <div class="momentum-heading">
+        <div>
+          <span class="eyebrow">Seven-day signal</span>
+          <h3 id="momentum-title">Focus velocity</h3>
+        </div>
+        <div class="momentum-heading-actions">
+          <span class="momentum-today">
+            <strong>${today ? formatMomentumDuration(today.focusSeconds) : "0m"}</strong>
+            <small>focused today</small>
+          </span>
+          <span class="velocity-badge is-${velocity.tone}">${escapeHtml(velocity.label)}</span>
+        </div>
+      </div>
+      <div class="momentum-chart-wrap">
+        ${renderVelocityChart(days, "dashboard-velocity-fill")}
+      </div>
+      ${renderDaySignals(days)}
+    </article>
+  `;
+}
+
 function renderInsights(data: Dashboard): string {
   return `
     <section id="insights" class="page-section">
@@ -420,6 +597,7 @@ function renderInsights(data: Dashboard): string {
         </div>
         <span class="muted">${formatDuration(data.stats.monthFocusSeconds)} focused this month</span>
       </div>
+      ${renderDashboardMomentum(data)}
       <div class="insight-grid">
         ${data.stats.periods
           .map((summary) => {
@@ -699,6 +877,27 @@ function renderQuickUpdate(update: AppUpdateState): string {
   `;
 }
 
+function renderQuickMomentum(data: Dashboard): string {
+  const days = data.stats.dailyProgress;
+  const velocity = velocitySummary(days);
+
+  return `
+    <section class="quick-momentum is-${velocity.tone}" aria-labelledby="quick-momentum-title">
+      <div class="quick-momentum-heading">
+        <div>
+          <span>Momentum</span>
+          <h2 id="quick-momentum-title">Last 7 days</h2>
+        </div>
+        <span class="quick-velocity is-${velocity.tone}">${escapeHtml(velocity.label)}</span>
+      </div>
+      <div class="quick-velocity-chart">
+        ${renderVelocityChart(days, "quick-velocity-fill")}
+      </div>
+      ${renderDaySignals(days)}
+    </section>
+  `;
+}
+
 function renderQuickGoal(goal: Goal, data: Dashboard): string {
   const isFocusing = data.activeSession?.goalId === goal.id;
   const progress = goalProgress(goal);
@@ -731,9 +930,117 @@ function renderQuickGoal(goal: Goal, data: Dashboard): string {
   `;
 }
 
+function microphoneIcon(): string {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 15.25a3.75 3.75 0 0 0 3.75-3.75V7a3.75 3.75 0 1 0-7.5 0v4.5A3.75 3.75 0 0 0 12 15.25Z" fill="none" stroke="currentColor" stroke-width="1.8" />
+      <path d="M5.75 11.25a6.25 6.25 0 0 0 12.5 0M12 17.5V21M9.25 21h5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    </svg>
+  `;
+}
+
+function renderQuickThoughtSheet(
+  data: Dashboard,
+  composer: ThoughtComposerState,
+): string {
+  const recentThoughts = data.thoughtDumps.slice(0, 3);
+  const speechHint = composer.message ??
+    (composer.speechSupported
+      ? "Tap the mic and speak, or type anything on your mind."
+      : "For speech, focus the field and press Fn twice for Mac Dictation.");
+
+  return `
+    <section
+      class="quick-thought-sheet ${composer.isOpen ? "is-open" : ""}"
+      aria-labelledby="quick-thought-title"
+      aria-hidden="${!composer.isOpen}"
+      ${composer.isOpen ? "" : "inert"}
+    >
+      <div class="quick-thought-sheet-header">
+        <div>
+          <span class="eyebrow">Clear your head</span>
+          <h2 id="quick-thought-title">Thought dump</h2>
+        </div>
+        <button class="quick-icon-button" type="button" data-action="close-thought" aria-label="Close thought dump">×</button>
+      </div>
+
+      <p class="quick-thought-intro">Capture the messy version now. Decide what it means later.</p>
+
+      <div class="quick-thought-input-wrap ${composer.isListening ? "is-listening" : ""}">
+        <textarea
+          id="quick-thought-input"
+          data-thought-draft
+          maxlength="4000"
+          placeholder="What keeps circling in your head?"
+          aria-label="Thought dump"
+        >${escapeHtml(composer.draft)}</textarea>
+        <button
+          class="quick-mic-button ${composer.isListening ? "is-listening" : ""}"
+          type="button"
+          data-action="toggle-thought-speech"
+          aria-pressed="${composer.isListening}"
+          aria-label="${composer.isListening ? "Stop listening" : "Dictate a thought"}"
+          title="${composer.isListening ? "Stop listening" : "Dictate a thought"}"
+        >${microphoneIcon()}</button>
+      </div>
+      <div class="quick-thought-hint ${composer.isListening ? "is-listening" : ""}">
+        <i></i><span>${escapeHtml(composer.isListening ? "Listening… speak naturally" : speechHint)}</span>
+      </div>
+
+      <div class="quick-thought-actions">
+        <button class="quick-save-thought" type="button" data-action="save-thought">Save locally</button>
+        <div class="quick-ai-actions" aria-label="Continue in an AI assistant">
+          <button type="button" data-action="send-thought" data-provider="codex">Codex <span>↗</span></button>
+          <button type="button" data-action="send-thought" data-provider="claude">Claude <span>↗</span></button>
+        </div>
+      </div>
+      <p class="quick-ai-note">AI handoff opens a draft for review. Nothing is sent automatically.</p>
+
+      <div class="quick-thought-recent">
+        <div class="quick-thought-recent-heading">
+          <span>Recent thoughts</span>
+          <small>${data.thoughtDumps.length} saved</small>
+        </div>
+        <div class="quick-thought-list">
+          ${
+            recentThoughts.length > 0
+              ? recentThoughts
+                  .map(
+                    (thought) => `
+                      <div class="quick-thought-row">
+                        <button
+                          type="button"
+                          data-action="load-thought"
+                          data-thought-id="${thought.id}"
+                          title="Load this thought"
+                        >
+                          <strong>${escapeHtml(thought.content)}</strong>
+                          <span>${thought.source === "speech" ? "Dictated" : "Typed"} · ${escapeHtml(formatDateTime(thought.createdAt))}</span>
+                        </button>
+                        <button
+                          class="quick-thought-delete"
+                          type="button"
+                          data-action="delete-thought"
+                          data-thought-id="${thought.id}"
+                          aria-label="Delete thought"
+                          title="Delete thought"
+                        >×</button>
+                      </div>
+                    `,
+                  )
+                  .join("")
+              : '<div class="quick-thought-empty">Your thoughts stay on this Mac until you choose an assistant.</div>'
+          }
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 export function renderMenuBarPopover(
   data: Dashboard,
   update: AppUpdateState,
+  thoughtComposer: ThoughtComposerState,
 ): string {
   const goals = currentGoals(data)
     .filter((goal) => goal.status === "active")
@@ -759,7 +1066,12 @@ export function renderMenuBarPopover(
               <small>Local focus system</small>
             </span>
           </div>
-          <button class="quick-icon-button" type="button" data-action="close-popover" aria-label="Close quick focus">×</button>
+          <div class="quick-panel-header-actions">
+            <button class="quick-thought-trigger" type="button" data-action="open-thought">
+              <span>✦</span> Thought dump
+            </button>
+            <button class="quick-icon-button" type="button" data-action="close-popover" aria-label="Close quick focus">×</button>
+          </div>
         </header>
 
         <section class="quick-focus-card ${data.activeSession ? "is-running" : ""}">
@@ -803,6 +1115,8 @@ export function renderMenuBarPopover(
           </div>
         </section>
 
+        ${renderQuickMomentum(data)}
+
         <section class="quick-goals-section" aria-labelledby="quick-goals-title">
           <div class="quick-section-heading">
             <div>
@@ -832,6 +1146,8 @@ export function renderMenuBarPopover(
           <span><i></i> Stored only on this Mac</span>
           <button type="button" data-action="open-dashboard">Review progress <span>→</span></button>
         </footer>
+
+        ${renderQuickThoughtSheet(data, thoughtComposer)}
       </section>
     </div>
   `;

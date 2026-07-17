@@ -32,12 +32,32 @@ export interface DailyReview {
   updatedAt: number;
 }
 
+export type ThoughtSource = "typed" | "speech";
+
+export interface ThoughtDump {
+  id: string;
+  content: string;
+  source: ThoughtSource;
+  createdAt: number;
+}
+
 export interface PeriodSummary {
   period: GoalPeriod;
   focusSeconds: number;
   plannedMinutes: number;
   completedGoals: number;
   totalGoals: number;
+}
+
+export type DailyProgressStatus = "empty" | "missed" | "partial" | "met";
+
+export interface DailyProgress {
+  date: string;
+  focusSeconds: number;
+  plannedMinutes: number;
+  progressPercent: number;
+  status: DailyProgressStatus;
+  isToday: boolean;
 }
 
 export interface DashboardStats {
@@ -48,6 +68,7 @@ export interface DashboardStats {
   completedGoals: number;
   focusStreakDays: number;
   periods: PeriodSummary[];
+  dailyProgress: DailyProgress[];
 }
 
 export interface Dashboard {
@@ -58,6 +79,7 @@ export interface Dashboard {
   activeSession: FocusSession | null;
   recentSessions: FocusSession[];
   reviews: DailyReview[];
+  thoughtDumps: ThoughtDump[];
   stats: DashboardStats;
 }
 
@@ -72,6 +94,21 @@ export interface ReviewInput {
   shipped: string;
   blocker: string;
   nextFocus: string;
+}
+
+export interface ThoughtDumpInput {
+  content: string;
+  source: ThoughtSource;
+}
+
+export type AssistantProvider = "codex" | "claude";
+
+export interface ThoughtComposerState {
+  isOpen: boolean;
+  draft: string;
+  isListening: boolean;
+  speechSupported: boolean;
+  message: string | null;
 }
 
 export interface SystemPreferences {

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="GoalBar is a local-first macOS focus app that keeps your most important goal visible in the menu bar."
+    />
+    <meta name="theme-color" content="#f5f7ff" />
+    <meta property="og:title" content="GoalBar — Keep the goal. Lose the noise." />
+    <meta
+      property="og:description"
+      content="A quiet, local-first focus system for developers and founders."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://goalbar.top" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>GoalBar — Focus that stays in sight</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
+    <header class="site-header glass-shell">
+      <a class="brand" href="#top" aria-label="GoalBar home">
+        <span class="brand-mark" aria-hidden="true">G.</span>
+        <span>GoalBar</span>
+      </a>
+
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="#workflow">How it works</a>
+        <a href="#privacy">Privacy</a>
+      </nav>
+
+      <a
+        class="button button-small button-ghost"
+        href="https://github.com/ducnguyen67201/NoGoalsNoGain/releases/latest/download/GoalBar-macOS.dmg"
+        aria-label="Download GoalBar for macOS"
+      >
+        Download
+        <span aria-hidden="true">↓</span>
+      </a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <div class="status-pill">
+            <span class="status-dot" aria-hidden="true"></span>
+            Local-first · Built for macOS
+          </div>
+
+          <h1>Keep the goal.<br /><span>Lose the noise.</span></h1>
+          <p class="hero-lede">
+            GoalBar keeps your most important outcome in the Mac menu bar, tracks
+            focused time, and helps you close each day knowing what moved forward.
+          </p>
+
+          <div class="hero-actions">
+            <a
+              class="button button-primary"
+              href="https://github.com/ducnguyen67201/NoGoalsNoGain/releases/latest/download/GoalBar-macOS.dmg"
+              aria-label="Download GoalBar for macOS"
+            >
+              Download for macOS
+              <span aria-hidden="true">↓</span>
+            </a>
+            <a class="button button-secondary" href="#workflow">See how it works</a>
+          </div>
+
+          <ul class="hero-notes" aria-label="Product highlights">
+            <li><span aria-hidden="true">⌘</span> Apple silicon + Intel</li>
+            <li><span aria-hidden="true">✓</span> No account</li>
+            <li><span aria-hidden="true">✓</span> No tracking</li>
+            <li><span aria-hidden="true">✓</span> Your data stays local</li>
+          </ul>
+        </div>
+
+        <div class="product-stage" aria-label="GoalBar product preview">
+          <div class="orbit orbit-one" aria-hidden="true"></div>
+          <div class="orbit orbit-two" aria-hidden="true"></div>
+
+          <div class="menu-preview glass-control">
+            <span class="menu-logo">G.</span>
+            <span class="menu-goal">Ship onboarding</span>
+            <span class="menu-time">· 42m</span>
+          </div>
+
+          <div class="app-window glass-panel">
+            <div class="window-toolbar">
+              <div class="traffic-lights" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="window-title">GoalBar</span>
+              <span class="window-date">Today</span>
+            </div>
+
+            <div class="app-layout">
+              <aside class="app-sidebar" aria-label="Product preview navigation">
+                <div class="preview-brand">
+                  <span class="preview-brand-mark">G.</span>
+                  <strong>GoalBar</strong>
+                </div>
+                <div class="preview-nav">
+                  <span class="is-active">⌁ <b>Today</b></span>
+                  <span>◎ <b>Goals</b></span>
+                  <span>↗ <b>Insights</b></span>
+                  <span>◷ <b>History</b></span>
+                </div>
+                <div class="local-chip">
+                  <i aria-hidden="true"></i>
+                  <span><b>Local-first</b>Your Mac, your data.</span>
+                </div>
+              </aside>
+
+              <div class="app-main">
+                <div class="app-heading">
+                  <div>
+                    <span class="eyebrow">Thursday, July 16</span>
+                    <h2>Make today count.</h2>
+                  </div>
+                  <button type="button" aria-label="Create a new goal">＋ New goal</button>
+                </div>
+
+                <article class="focus-card">
+                  <div class="focus-card-top">
+                    <span class="eyebrow"><i class="pulse" aria-hidden="true"></i> Focus in progress</span>
+                    <span class="period-chip">Today</span>
+                  </div>
+                  <div class="focus-card-body">
+                    <div>
+                      <h3>Ship onboarding to the first 10 users</h3>
+                      <p>Stay with the outcome. The clock keeps running.</p>
+                    </div>
+                    <strong class="timer">42:18</strong>
+                  </div>
+                  <div class="progress-track" aria-label="68% of focus target completed">
+                    <span></span>
+                  </div>
+                  <div class="focus-footer">
+                    <button type="button">Stop focus</button>
+                    <span>68% of target</span>
+                  </div>
+                </article>
+
+                <div class="mini-stats">
+                  <article><span>Focused today</span><strong>1h 42m</strong></article>
+                  <article><span>Goals shipped</span><strong>3</strong></article>
+                  <article><span>Current streak</span><strong>7 days</strong></article>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="floating-card floating-focus glass-control">
+            <span class="floating-icon">⌁</span>
+            <span><b>Quiet focus</b>One outcome at a time.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-intro" id="features">
+        <div class="section-heading">
+          <span class="eyebrow">Less management. More momentum.</span>
+          <h2>A focus system that stays out of your way.</h2>
+          <p>
+            Set the outcome, start the clock, and keep moving. GoalBar turns a
+            sprawling task list into one clear commitment.
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card glass-panel feature-wide">
+            <div class="feature-copy">
+              <span class="feature-number">01</span>
+              <h3>Your goal, always in sight.</h3>
+              <p>
+                The menu bar quietly carries your primary outcome so your next
+                action survives tab switching, meetings, and the rest of the day.
+              </p>
+            </div>
+            <div class="feature-visual menu-feature" aria-hidden="true">
+              <div class="mac-menu">
+                <span>●</span><span>File</span><span>Edit</span>
+                <strong><i>G.</i> Ship launch page · 1h 12m</strong>
+                <span>◉</span><span>⌁</span><span>Thu 3:42 PM</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="feature-card glass-panel">
+            <div class="feature-icon icon-timer" aria-hidden="true">◴</div>
+            <span class="feature-number">02</span>
+            <h3>Focus time with context.</h3>
+            <p>
+              Track time against the goal—not a generic timer—then see planned
+              versus actual effort across today, this week, and this month.
+            </p>
+            <div class="rings" aria-hidden="true">
+              <span class="ring ring-large"></span>
+              <span class="ring ring-medium"></span>
+              <span class="ring ring-small"></span>
+              <b>74%</b>
+            </div>
+          </article>
+
+          <article class="feature-card glass-panel">
+            <div class="feature-icon icon-review" aria-hidden="true">↗</div>
+            <span class="feature-number">03</span>
+            <h3>Close the loop daily.</h3>
+            <p>
+              Capture what shipped, name the blocker, and choose tomorrow’s first
+              focus before you step away.
+            </p>
+            <div class="review-lines" aria-hidden="true">
+              <span><i>✓</i> Shipped onboarding flow</span>
+              <span><i>→</i> Unblock billing webhook</span>
+              <span><i>⌁</i> Start with activation emails</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section workflow" id="workflow">
+        <div class="section-heading section-heading-left">
+          <span class="eyebrow">A small, repeatable loop</span>
+          <h2>Decide. Focus. Ship. Review.</h2>
+        </div>
+
+        <ol class="workflow-list">
+          <li>
+            <span class="step-number">01</span>
+            <div>
+              <h3>Choose the outcome</h3>
+              <p>Set a daily, weekly, or monthly goal and make one primary.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <div>
+              <h3>Start focused work</h3>
+              <p>The timer keeps running even when the dashboard is hidden.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <div>
+              <h3>Ship and learn</h3>
+              <p>Mark progress, compare the plan, and record tomorrow’s first move.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section privacy-section glass-panel" id="privacy">
+        <div class="privacy-copy">
+          <span class="eyebrow">Local-first by design</span>
+          <h2>Your goals are yours.</h2>
+          <p>
+            GoalBar stores your focus history locally on your Mac. There are no
+            accounts, analytics trackers, or background activity monitoring.
+          </p>
+          <ul>
+            <li><span aria-hidden="true">✓</span> Local JSON storage</li>
+            <li><span aria-hidden="true">✓</span> No keystroke or screen monitoring</li>
+            <li><span aria-hidden="true">✓</span> Open development on GitHub</li>
+          </ul>
+        </div>
+
+        <div class="privacy-orb" aria-hidden="true">
+          <div class="orb-shell"><span>⌘</span></div>
+          <span class="orb-label">Stored on this Mac</span>
+        </div>
+      </section>
+
+      <section class="section final-cta">
+        <div class="cta-glow" aria-hidden="true"></div>
+        <span class="eyebrow">No goals. No gain.</span>
+        <h2>Put the outcome where you’ll see it.</h2>
+        <p>GoalBar is being built in public for founders, developers, and focused makers.</p>
+        <div class="hero-actions">
+          <a
+            class="button button-primary"
+            href="https://github.com/ducnguyen67201/NoGoalsNoGain/releases/latest/download/GoalBar-macOS.dmg"
+            aria-label="Download GoalBar for macOS"
+          >
+            Download for macOS <span aria-hidden="true">↓</span>
+          </a>
+          <a class="button button-secondary" href="#top">Back to top</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="#top" aria-label="GoalBar home">
+        <span class="brand-mark" aria-hidden="true">G.</span>
+        <span>GoalBar</span>
+      </a>
+      <p>Built with focus for macOS.</p>
+      <a
+        href="https://github.com/ducnguyen67201/NoGoalsNoGain"
+        target="_blank"
+        rel="noreferrer"
+      >GitHub ↗</a>
+    </footer>
+  </body>
+</html>
